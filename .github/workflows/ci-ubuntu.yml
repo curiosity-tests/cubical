@@ -1,6 +1,7 @@
 ## Adapted from the agda/agda-stdlib workflow
 
 name: Ubuntu build
+run-name: "Ubuntu build ${{ inputs.leg || github.event_name }} ${{ inputs.racecar_run }}"
 on:
   push:
     branches:
@@ -9,6 +10,21 @@ on:
     branches:
       - master
 
+  workflow_dispatch:
+    inputs:
+      leg:
+        description: "baseline (uninstrumented) or instrumented (under chalk/curiosity)"
+        type: choice
+        options: [instrumented, baseline]
+        default: baseline
+      profile:
+        description: "CrashOverride chalk profile"
+        type: string
+        default: curiosity-tests-racecar
+      racecar_run:
+        description: "racecar correlation token, echoed into the run name"
+        type: string
+        default: ""
 ########################################################################
 ## CONFIGURATION
 ##
@@ -42,6 +58,7 @@ on:
 ########################################################################
 
 env:
+  CHALK_ON: ${{ inputs.leg == 'instrumented' }}
   AGDA_BRANCH: v2.8.0
   GHC_VERSION: 9.10.2
   CABAL_VERSION: 3.12.1.0
@@ -147,6 +164,7 @@ jobs:
             FIX_WHITESPACE='~/.local/fix-whitespace/bin/fix-whitespace'
 
       - name: Deploy to GitHub Pages
+        continue-on-error: true   # racecar: scan/report/push step, must not fail the build
         if: github.event_name == 'push' && github.ref_name == 'master'
         uses: JamesIves/github-pages-deploy-action@v4
         with:
