@@ -5,10 +5,10 @@ run-name: "Ubuntu build ${{ inputs.leg || github.event_name }} ${{ inputs.raceca
 on:
   push:
     branches:
-      - master
+    - master
   pull_request:
     branches:
-      - master
+    - master
 
   workflow_dispatch:
     inputs:
@@ -75,109 +75,181 @@ jobs:
   test-cubical:
     runs-on: ubuntu-latest
     steps:
-      - name: Install cabal
-        uses: haskell-actions/setup@v2
-        with:
-          ghc-version: ${{ env.GHC_VERSION }}
-          cabal-version: ${{ env.CABAL_VERSION }}
-          cabal-update: true
+    - name: Install cabal
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ env.GHC_VERSION }}
+        cabal-version: ${{ env.CABAL_VERSION }}
+        cabal-update: true
 
       # This caching step allows us to save a lot of building time by only
       # rebuilding Agda, and re-checking unchanged library files if
       # absolutely necessary i.e. if we change either the version of Agda,
       # ghc, or cabal that we want to use for the build.
-      - name: Restore external dependencies cache
-        uses: actions/cache/restore@v4
-        id: cache-external-restore
-        with:
-          path: ${{ env.CACHE_PATHS }}
-          key: ${{ runner.os }}-${{ env.GHC_VERSION }}-${{ env.CABAL_VERSION }}-${{ env.AGDA_BRANCH }}
+    - name: Restore external dependencies cache
+      uses: actions/cache/restore@v4
+      id: cache-external-restore
+      with:
+        path: ${{ env.CACHE_PATHS }}
+        key: ${{ runner.os }}-${{ env.GHC_VERSION }}-${{ env.CABAL_VERSION }}-${{ env.AGDA_BRANCH }}
 
       ########################################################################
       ## INSTALLATION STEPS
       ########################################################################
 
-      - name: Download and install Agda from github
-        if: steps.cache-external-restore.outputs.cache-hit != 'true'
-        run: |
-          git clone https://github.com/agda/agda --branch ${{ env.AGDA_BRANCH }} --depth=1
-          cd agda
-          ${{ env.CABAL_INSTALL }}
-          cd ..
-          rm -rf agda
+    - name: Download and install Agda from github
+      if: steps.cache-external-restore.outputs.cache-hit != 'true'
+      run: |
+        git clone https://github.com/agda/agda --branch ${{ env.AGDA_BRANCH }} --depth=1
+        cd agda
+        ${{ env.CABAL_INSTALL }}
+        cd ..
+        rm -rf agda
 
-      - name: Save external dependencies cache
-        if: steps.cache-external-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        id: cache-external-save
-        with:
-          path: ${{ env.CACHE_PATHS }}
-          key: ${{ steps.cache-external-restore.outputs.cache-primary-key }}
+    - name: Save external dependencies cache
+      if: steps.cache-external-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      id: cache-external-save
+      with:
+        path: ${{ env.CACHE_PATHS }}
+        key: ${{ steps.cache-external-restore.outputs.cache-primary-key }}
 
       ########################################################################
       ## CHECKOUT
       ########################################################################
 
       # By default github actions do not pull the repo
-      - name: Checkout cubical
-        uses: crashappsec/action-checkout@main
-        with:
-          chalk: ${{ env.CHALK_ON }}
-          profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
-          lfs: false
-      - name: Assert instrumentation is live
-        if: env.CHALK_ON == 'true'
-        continue-on-error: true
-        run: |
-          test -n "${CURIOSITY_ROOT:-}" || { echo "::warning::CURIOSITY_ROOT unset in this step - in a container job the observables install on the host"; exit 1; }
-      - name: Get and run fix-whitespace
-        uses: andreasabel/fix-whitespace-action@v1
+    - name: Checkout cubical
+      uses: crashappsec/action-checkout@main
+      with:
+        chalk: ${{ env.CHALK_ON }}
+        profile: ${{ inputs.profile || 'curiosity-tests-racecar' }}
+        lfs: false
+    - name: Get and run fix-whitespace
+      uses: andreasabel/fix-whitespace-action@v1
 
       ########################################################################
       ## TESTING
       ########################################################################
 
-      - name: Restore library cache
-        uses: actions/cache/restore@v4
-        id: cache-library-restore
-        with:
-          path: ./_build
-          key: library-${{ runner.os }}-${{ env.GHC_VERSION }}-${{ env.CABAL_VERSION }}-${{ env.AGDA_BRANCH }}-${{ hashFiles('Cubical/**', 'cubical.agda-lib') }}
-          restore-keys: |
-            library-${{ runner.os }}-${{ env.GHC_VERSION }}-${{ env.CABAL_VERSION }}-${{ env.AGDA_BRANCH }}-
+    - name: Restore library cache
+      uses: actions/cache/restore@v4
+      id: cache-library-restore
+      with:
+        path: ./_build
+        key: library-${{ runner.os }}-${{ env.GHC_VERSION }}-${{ env.CABAL_VERSION }}-${{ env.AGDA_BRANCH }}-${{ hashFiles('Cubical/**', 'cubical.agda-lib') }}
+        restore-keys: |
+          library-${{ runner.os }}-${{ env.GHC_VERSION }}-${{ env.CABAL_VERSION }}-${{ env.AGDA_BRANCH }}-
 
-      - name: Put installed programs in PATH
-        run: echo "~/.cabal/bin" >> "${GITHUB_PATH}"
+    - name: Put installed programs in PATH
+      run: echo "~/.cabal/bin" >> "${GITHUB_PATH}"
 
-      - name: Test cubical
-        run: |
-          make test \
-            AGDA_EXEC='~/.cabal/bin/agda -WnoUnsupportedIndexedMatch -W error' \
-            FIX_WHITESPACE='~/.local/fix-whitespace/bin/fix-whitespace'
+    - name: Test cubical
+      run: |
+        make test \
+          AGDA_EXEC='~/.cabal/bin/agda -WnoUnsupportedIndexedMatch -W error' \
+          FIX_WHITESPACE='~/.local/fix-whitespace/bin/fix-whitespace'
 
-      - name: Save library cache
-        if: steps.cache-library-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        id: cache-library-save
-        with:
-          path: ./_build
-          key: ${{ steps.cache-library-restore.outputs.cache-primary-key }}
+    - name: Save library cache
+      if: steps.cache-library-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      id: cache-library-save
+      with:
+        path: ./_build
+        key: ${{ steps.cache-library-restore.outputs.cache-primary-key }}
 
       ########################################################################
       ## HTML GENERATION
       ########################################################################
 
-      - name: Htmlize cubical
-        if: github.event_name == 'push' && github.ref_name == 'master'
-        run: |
-          make listings \
-            AGDA_EXEC='~/.cabal/bin/agda -WnoUnsupportedIndexedMatch -W error' \
-            FIX_WHITESPACE='~/.local/fix-whitespace/bin/fix-whitespace'
+    - name: Htmlize cubical
+      if: github.event_name == 'push' && github.ref_name == 'master'
+      run: |
+        make listings \
+          AGDA_EXEC='~/.cabal/bin/agda -WnoUnsupportedIndexedMatch -W error' \
+          FIX_WHITESPACE='~/.local/fix-whitespace/bin/fix-whitespace'
 
-      - name: Deploy to GitHub Pages
-        continue-on-error: true   # racecar: scan/report/push step, must not fail the build
-        if: github.event_name == 'push' && github.ref_name == 'master'
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          branch: gh-pages
-          folder: html
+    - name: Deploy to GitHub Pages
+      continue-on-error: true     # racecar: scan/report/push step, must not fail the build
+      if: github.event_name == 'push' && github.ref_name == 'master'
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        branch: gh-pages
+        folder: html
+    - name: Check observables and crashes
+      if: always() && env.CHALK_ON == 'true'
+      shell: bash
+      run: |
+        set -uo pipefail
+        root="${CURIOSITY_ROOT:-}"
+        home="${CURIOSITY_HOME:-/mnt/curiosity}"
+        obs="${home}/observables"
+        fail=0
+
+        echo "::group::curiosity layout"
+        echo "CURIOSITY_ROOT=${root:-<unset>}"
+        echo "CURIOSITY_HOME=${home}"
+        ls -la "${obs}" 2>/dev/null || echo "no observables dir at ${obs}"
+        echo "::endgroup::"
+
+        # Observables for THIS run+attempt. The prefix matters: a stale file from an
+        # earlier run on the same mount would otherwise pass.
+        prefix="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+        shopt -s nullglob
+        mine=("${obs}/${prefix}"*)
+        if [ ${#mine[@]} -eq 0 ]; then
+          mine=("${obs}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-observables"*)
+        fi
+        if [ ${#mine[@]} -eq 0 ]; then
+          echo "::error::no observables for run ${prefix} in ${obs} - instrumentation produced nothing"
+          fail=1
+        else
+          echo "observables present: ${#mine[@]} file(s)"
+          printf '  %s\n' "${mine[@]}"
+        fi
+
+        for f in "${mine[@]}"; do
+          case "$f" in
+            *.jsonl|*.json|*.combined)
+              if ! jq --slurp "." "$f" > /dev/null 2>&1; then
+                echo "::error::observables do not parse: $f"
+                fail=1
+              fi
+              ;;
+          esac
+        done
+
+        # Crash thresholds copied from check-run: a few null frames are noise, more than
+        # five is a stack walk into nothing.
+        for f in "${root}"/log/co-host*.log "${home}"/log/co-host*.log; do
+          [ -f "$f" ] || continue
+          echo "Asserting that there is no crash in $f"
+          if [ "$(grep -c 'p 00000000' "$f" 2>/dev/null || echo 0)" -gt 5 ] \
+            || [ "$(grep -E -c 'FATAL: Uncaught signal|Address not mapped at|RAX 0x.*RBX 0x' "$f" 2>/dev/null || echo 0)" -gt 1 ]; then
+            echo "::error::crash signature in $f"
+            grep -E 'FATAL: Uncaught signal|Address not mapped at' "$f" | head -5 || true
+            fail=1
+          fi
+        done
+
+        cores=("${root}"/coredump.* "${home}"/coredump.*)
+        if [ ${#cores[@]} -gt 0 ]; then
+          echo "::error::coredump present: ${cores[*]}"
+          fail=1
+        fi
+
+        for f in "${root}"/runc.log "${root}"/runc.global.log \
+                 "${home}"/runc.log "${home}"/runc.global.log; do
+          [ -f "$f" ] || continue
+          if grep -q '^E:' "$f"; then
+            echo "::error::error in $f"
+            grep '^E:' "$f" | head -5
+            fail=1
+          fi
+        done
+
+        if [ "$fail" -ne 0 ]; then
+          echo "::error::instrumentation check FAILED"
+          exit 1
+        fi
+        echo "instrumentation check passed"
